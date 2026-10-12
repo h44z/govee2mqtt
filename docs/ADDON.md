@@ -53,7 +53,7 @@ when we get to that point.
 ![image](https://github.com/wez/govee-lan-hass/assets/117777/c425615b-d7be-4ff2-a0d9-c8b7cfb8b63e)
 
 4. Click on "Repositories"
-5. Enter `https://github.com/wez/govee2mqtt` and click "Add"
+5. Enter `https://github.com/h44z/govee2mqtt` and click "Add"
 6. You should see:
 
 ![image](https://github.com/wez/govee-lan-hass/assets/117777/a2603e2d-dec1-4711-8d94-c957bf4a7a01)
@@ -65,12 +65,18 @@ when we get to that point.
 
 9. Click on it
 10. Click "install"
+    This fork builds a pinned source revision on your Home Assistant host.
+    The first installation needs internet access, free memory and disk space,
+    and can take several minutes. AMD64 and ARM64 are supported.
 11. At the top of the screen is a "Configuration" tab, click it
 
 ![image](https://github.com/wez/govee-lan-hass/assets/117777/fd2953b5-a576-4ab4-a903-0330a749ae97)
 
 12. Check the "Show unused optional configuration options" option
-13. Fill out at least the first three options; the govee email, password and api key
+13. Set the Govee email/password for cloud/IoT support and the API key for the
+    official API. These are optional for LAN-only operation. Leave MQTT options
+    blank for the Mosquitto add-on, or set `mqtt_host` and any required credentials
+    for an external broker.
 
 14. Click "Save" (bottom right)
 15. Click on the "Info" tab (top of screen)

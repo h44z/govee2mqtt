@@ -34,6 +34,13 @@ via the [Home Assistant MQTT Integration](https://www.home-assistant.io/integrat
 
 ## Usage
 
+For Home Assistant OS, add `https://github.com/h44z/govee2mqtt` under
+**Settings → Add-ons → Add-on Store → ⋮ → Repositories**, then install
+**Govee to MQTT Bridge**. The add-on builds this fork from source on your
+Home Assistant host; no prebuilt add-on image is required.
+
+[Add this repository to Home Assistant](https://my.home-assistant.io/redirect/supervisor_add_addon_repository/?repository_url=https%3A%2F%2Fgithub.com%2Fh44z%2Fgovee2mqtt)
+
 * [Installing the HASS Add-On](docs/ADDON.md) - for HAOS and Supervised HASS users
 * [Running it in Docker](docs/DOCKER.md)
 * [Configuration](docs/CONFIG.md)
