@@ -1,5 +1,5 @@
 use crate::hass_mqtt::climate::mqtt_set_temperature;
-use crate::hass_mqtt::enumerator::{enumerate_all_entites, enumerate_entities_for_device};
+use crate::hass_mqtt::enumerator::{enumerate_all_entities, enumerate_entities_for_device};
 use crate::hass_mqtt::humidifier::{mqtt_device_set_work_mode, mqtt_humidifier_set_target};
 use crate::hass_mqtt::instance::EntityList;
 use crate::hass_mqtt::number::mqtt_number_command;
@@ -15,8 +15,10 @@ use async_channel::Receiver;
 use mosquitto_rs::router::{MqttRouter, Params, Payload, State};
 use mosquitto_rs::{Client, Event, QoS};
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::sync::Mutex;
 
 const HASS_REGISTER_DELAY: tokio::time::Duration = tokio::time::Duration::from_secs(15);
 
@@ -109,14 +111,36 @@ impl HassArguments {
 #[derive(Clone)]
 pub struct HassClient {
     client: Client,
+    // None until the first registration completes. Serialize discovery so scans
+    // arriving during that registration can check the exact LAN device snapshot.
+    registered_lan_devices: Arc<Mutex<Option<HashSet<String>>>>,
 }
 
 impl HassClient {
     async fn register_with_hass(&self, state: &StateHandle) -> anyhow::Result<()> {
-        let entities = enumerate_all_entites(state).await?;
+        let mut registered_lan_devices = self.registered_lan_devices.lock().await;
+        let devices = state.devices().await;
+        let entities = enumerate_all_entities(state, &devices).await?;
+        self.publish_discovery(state, &entities).await?;
+        *registered_lan_devices = Some(
+            devices
+                .into_iter()
+                // Discovery can gain entities or capabilities when LAN metadata arrives.
+                .filter(|device| device.lan_device.is_some() && device.is_controllable())
+                .map(|device| device.id)
+                .collect(),
+        );
 
+        Ok(())
+    }
+
+    async fn publish_discovery(
+        &self,
+        state: &StateHandle,
+        entities: &EntityList,
+    ) -> anyhow::Result<()> {
         // Register the configs
-        log::trace!("register_with_hass: register entities");
+        log::trace!("publish_discovery: register entities");
         entities.publish_config(state, self).await?;
 
         // Allow hass extra time to register the entities before
@@ -129,16 +153,44 @@ impl HassClient {
         tokio::time::sleep(delay).await;
 
         // Mark as available
-        log::trace!("register_with_hass: mark as online");
+        log::trace!("publish_discovery: mark as online");
         self.publish(availability_topic(), "online")
             .await
             .context("online -> availability_topic")?;
 
         // report initial state
-        log::trace!("register_with_hass: reporting state");
-        entities.notify_state(self).await.context("notify_state")?;
+        log::trace!("publish_discovery: reporting state");
+        entities.notify_state(self).await.context("notify_state")
+    }
 
-        log::trace!("register_with_hass: done");
+    pub async fn notify_lan_device(
+        &self,
+        state: &StateHandle,
+        device_id: &str,
+        status_updated: bool,
+    ) -> anyhow::Result<()> {
+        let mut registration = self.registered_lan_devices.lock().await;
+        let Some(registered_lan_devices) = registration.as_mut() else {
+            return Ok(());
+        };
+        let device = state
+            .device_by_id(device_id)
+            .await
+            .with_context(|| format!("cannot find LAN device {device_id}"))?;
+
+        if registered_lan_devices.contains(device_id) {
+            drop(registration);
+            if status_updated {
+                self.advise_hass_of_light_state(&device, state).await?;
+            }
+        } else if device.is_controllable() {
+            // A scan response is enough for discovery, even if the separate
+            // status request failed. Later polls can supply the device state.
+            let mut entities = EntityList::new();
+            enumerate_entities_for_device(&device, state, &mut entities).await?;
+            self.publish_discovery(state, &entities).await?;
+            registered_lan_devices.insert(device.id);
+        }
 
         Ok(())
     }
@@ -672,6 +724,7 @@ pub async fn spawn_hass_integration(
     state
         .set_hass_client(HassClient {
             client: client.clone(),
+            registered_lan_devices: Arc::default(),
         })
         .await;
 

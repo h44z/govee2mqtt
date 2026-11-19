@@ -19,15 +19,16 @@ use anyhow::Context;
 
 use uuid::Uuid;
 
-pub async fn enumerate_all_entites(state: &StateHandle) -> anyhow::Result<EntityList> {
+pub async fn enumerate_all_entities(
+    state: &StateHandle,
+    devices: &[ServiceDevice],
+) -> anyhow::Result<EntityList> {
     let mut entities = EntityList::new();
 
     enumerate_global_entities(state, &mut entities).await?;
     enumerate_scenes(state, &mut entities).await?;
 
-    let devices = state.devices().await;
-
-    for d in &devices {
+    for d in devices {
         enumerate_entities_for_device(d, state, &mut entities)
             .await
             .with_context(|| format!("Config::for_device({d})"))?;

@@ -255,14 +255,27 @@ impl ServeCommand {
                     let state = state.clone();
                     let client = client.clone();
                     tokio::spawn(async move {
-                        if let Ok(status) = client.query_status(&lan_device).await {
-                            state
-                                .device_mut(&lan_device.sku, &lan_device.device)
-                                .await
-                                .set_lan_device_status(status);
+                        let status_updated =
+                            if let Ok(status) = client.query_status(&lan_device).await {
+                                state
+                                    .device_mut(&lan_device.sku, &lan_device.device)
+                                    .await
+                                    .set_lan_device_status(status);
+                                true
+                            } else {
+                                false
+                            };
 
-                            log::trace!("LAN disco: update and notify {}", lan_device.device);
-                            state.notify_of_state_change(&lan_device.device).await.ok();
+                        if let Some(hass) = state.get_hass_client().await {
+                            if let Err(err) = hass
+                                .notify_lan_device(&state, &lan_device.device, status_updated)
+                                .await
+                            {
+                                log::error!(
+                                    "publishing LAN discovery or state for {}: {err:#}",
+                                    lan_device.device
+                                );
+                            }
                         }
                     });
                 }
