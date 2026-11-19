@@ -3,7 +3,7 @@ FROM rust:1-bookworm AS builder
 
 # Supervisor uses addon/ as its build context, so fetch a pinned source
 # revision instead of trying to COPY files from the repository parent.
-ARG GOVEE_SOURCE_REF=4c3ff4e69cd662dbc164c982672fc808e950785a
+ARG GOVEE_SOURCE_REF=4708609f48b30c82c9e8bd2749c4f23af93497f8
 ARG BUILD_VERSION
 ENV GOVEE_CI_TAG=${BUILD_VERSION}
 RUN apt-get update && apt-get install -y --no-install-recommends \
